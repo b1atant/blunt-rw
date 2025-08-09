@@ -88,6 +88,10 @@ def main() -> None:
     "-g", "--remove-encrypted", action="store_true",
     help="only remove encrypted app extensions"
   )
+  parser.add_argument(
+    "-p", "--inject-to-path", action="store_true",
+    help="inject dylibs into @executable_path instead of @executable_path/Frameworks"
+  )
 
   parser.add_argument(
     "-c", "--compress", metavar="level", type=int, default=6,
@@ -104,7 +108,7 @@ def main() -> None:
   )
 
   parser.add_argument(
-    "--version", action="version", version="cyan v1.4.4"
+    "--version", action="version", version="cyan v1.4.5"
   )
 
   from cyan import logic

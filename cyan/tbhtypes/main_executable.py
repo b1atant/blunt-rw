@@ -24,7 +24,7 @@ class MainExecutable(Executable):
     else:
       self.inj_func = self.lief_inject
 
-  def inject(self, tweaks: dict[str, str], tmpdir: str) -> None:
+  def inject(self, tweaks: dict[str, str], tmpdir: str, inject_to_path: bool = False) -> None:
     ENT_PATH = f"{self.bundle_path}/cyan.entitlements"
     PLUGINS_DIR = f"{self.bundle_path}/PlugIns"
     FRAMEWORKS_DIR = f"{self.bundle_path}/Frameworks"
@@ -42,7 +42,6 @@ class MainExecutable(Executable):
         for k in (".deb", ".dylib", ".framework")
     ):
       os.makedirs(FRAMEWORKS_DIR, exist_ok=True)
-
       # some apps really dont have this lol
       subprocess.run(
         [self.nt, "-add_rpath", "@executable_path/Frameworks", self.path],
@@ -68,22 +67,43 @@ class MainExecutable(Executable):
         fpath = f"{PLUGINS_DIR}/{bn}"
         existed = tbhutils.delete_if_exists(fpath, bn)
         shutil.copytree(path, fpath)
+        location = "PlugIns/"
       elif bn.endswith(".dylib"):
         path = shutil.copy2(path, tmpdir)
 
         e = Executable(path)
         e.fix_common_dependencies(needed)
-        e.fix_dependencies(tweaks)
+        e.fix_dependencies(tweaks, inject_to_path)
 
-        fpath = f"{FRAMEWORKS_DIR}/{bn}"
-        existed = tbhutils.delete_if_exists(fpath, bn)
-        self.inj_func(f"@rpath/{bn}")
-        shutil.move(path, FRAMEWORKS_DIR)
+        if inject_to_path:
+          # Inject directly into @executable_path hehehe
+          fpath = f"{self.bundle_path}/{bn}"
+          existed = tbhutils.delete_if_exists(fpath, bn)
+          self.inj_func(f"@executable_path/{bn}")
+          shutil.move(path, self.bundle_path)
+          location = "@executable_path/"
+        else:
+          # Default zx behavior: inject into @executable_path/Frameworks
+          fpath = f"{FRAMEWORKS_DIR}/{bn}"
+          existed = tbhutils.delete_if_exists(fpath, bn)
+          self.inj_func(f"@rpath/{bn}")
+          shutil.move(path, FRAMEWORKS_DIR)
+          location = "Frameworks/"
       elif bn.endswith(".framework"):
-        fpath = f"{FRAMEWORKS_DIR}/{bn}"
-        existed = tbhutils.delete_if_exists(fpath, bn)
-        self.inj_func(f"@rpath/{bn}/{bn[:-10]}")
-        shutil.copytree(path, fpath)
+        if inject_to_path:
+          # With -p flag, frameworks also go to @executable_path
+          fpath = f"{self.bundle_path}/{bn}"
+          existed = tbhutils.delete_if_exists(fpath, bn)
+          self.inj_func(f"@executable_path/{bn}/{bn[:-10]}")
+          shutil.copytree(path, fpath)
+          location = "@executable_path/"
+        else:
+          # Default zx behavior frameworks go to Frameworks/
+          fpath = f"{FRAMEWORKS_DIR}/{bn}"
+          existed = tbhutils.delete_if_exists(fpath, bn)
+          self.inj_func(f"@rpath/{bn}/{bn[:-10]}")
+          shutil.copytree(path, fpath)
+          location = "Frameworks/"
       else:
         fpath = f"{self.bundle_path}/{bn}"
         existed = tbhutils.delete_if_exists(fpath, bn)
@@ -91,9 +111,10 @@ class MainExecutable(Executable):
           shutil.copytree(path, fpath)
         except NotADirectoryError:
           shutil.copy2(path, self.bundle_path)
+        location = "@executable_path/"
 
       if not existed:
-        print(f"[*] injected {bn}")
+        print(f"[*] injected {bn} -> {location}")
 
     # orion has a *weak* dependency to substrate,
     # but will still crash without it. nice !!!!!!!!!!!

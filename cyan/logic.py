@@ -55,7 +55,7 @@ def main(parser: ArgumentParser) -> None:
       app.remove_encrypted_extensions()
 
     if args.f is not None:
-      app.executable.inject(args.f, tmpdir)
+      app.executable.inject(args.f, tmpdir, args.inject_to_path)
     if args.n is not None:
       app.plist.change_name(args.n)
     if args.v is not None:
@@ -84,7 +84,7 @@ def main(parser: ArgumentParser) -> None:
 
     # create subdirectories if necessary
     if "/" in args.o:
-        os.makedirs(os.path.dirname(args.o), exist_ok=True)
+      os.makedirs(os.path.dirname(args.o), exist_ok=True)
 
     # done !
     if OUTPUT_IS_IPA:

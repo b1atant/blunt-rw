@@ -49,7 +49,7 @@ class Executable:
       print(f"[!] {path} does not exist (executable)", file=sys.stderr)
       sys.exit(
         "[?] check the wiki for info: "
-        "https://github.com/asdfzxcvbn/pyzule-rw/wiki/"
+        "https://github.com/b1atant/blunt-rw/wiki/"
         "file-does-not-exist-(executable)-%3F"
       )
 
@@ -97,17 +97,23 @@ class Executable:
               f"{dep} -> {info['path']}"
             )
 
-  def fix_dependencies(self, tweaks: dict[str, str]) -> None:
+  def fix_dependencies(self, tweaks: dict[str, str], inject_to_path: bool = False) -> None:
     for dep in self.get_dependencies():
       for cname in tweaks:
         if cname in dep:
           # i wonder if there's a better way to do this?
           if cname.endswith(".framework"):
-            # nah, not gonna parse the plist,
-            # i've never seen a framework with a "mismatched" name
-            npath = f"@rpath/{cname}/{cname[:-10]}"
+            # frameworks go to @executable_path if inject_to_path is True, otherwise @rpath
+            if inject_to_path:
+              npath = f"@executable_path/{cname}/{cname[:-10]}"
+            else:
+              npath = f"@rpath/{cname}/{cname[:-10]}"
           else:
-            npath = f"@rpath/{cname}"
+            # dylibs go to @executable_path if inject_to_path is True, otherwise @rpath
+            if inject_to_path:
+              npath = f"@executable_path/{cname}"
+            else:
+              npath = f"@rpath/{cname}"
 
           if dep != npath:
             self.change_dependency(dep, npath)

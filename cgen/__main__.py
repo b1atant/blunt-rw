@@ -79,6 +79,10 @@ def main() -> None:
     "-g", "--remove-encrypted", action="store_true",
     help="only remove encrypted app extensions"
   )
+  parser.add_argument(
+    "-p", "--inject-to-path", action="store_true",
+    help="inject dylibs into @executable_path instead of @executable_path/Frameworks"
+  )
 
   generate_cyan(parser)
 
