@@ -83,6 +83,10 @@ def main() -> None:
     "-p", "--inject-to-path", action="store_true",
     help="inject dylibs into @executable_path instead of @executable_path/Frameworks"
   )
+  parser.add_argument(
+    "-a", "--inject-all", action="store_true",
+    help="inject dylibs into all app extensions (PlugIns and Extensions)"
+  )
 
   generate_cyan(parser)
 

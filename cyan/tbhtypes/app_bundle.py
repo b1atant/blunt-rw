@@ -54,6 +54,9 @@ class AppBundle:
         glob(f"{self.path}/**/*.framework", recursive=True)
     ), [])  # type: ignore
 
+  def get_all_appex(self) -> list[str]:
+    return glob(f"{self.path}/Extensions/*.appex") + glob(f"{self.path}/PlugIns/*.appex")
+
   def mass_operate(self, op: str, func: Literal["fakesign", "thin"]) -> None:
     # this works since we call this after injecting
     if self.cached_executables is None:
@@ -144,4 +147,74 @@ class AppBundle:
 
     self.plist.save()
     print("[*] updated app icon")
+
+  def _inject_into_extension(
+    self,
+    appex_path: str,
+    tweaks: dict[str, str],
+    inject_to_path: bool
+  ) -> None:
+    appex_name = os.path.basename(appex_path)
+
+    try:
+      ext_bundle = AppBundle(appex_path)
+    except Exception:
+      print(f"[?] skipping {appex_name}: couldn't read Info.plist")
+      return
+
+    if ext_bundle.executable.is_encrypted():
+      print(f"[?] skipping {appex_name}: encrypted")
+      return
+
+    # Inject only dylibs (not frameworks, debs, or appex)
+    dylibs_to_inject = {k: v for k, v in tweaks.items() if k.endswith(".dylib")}
+
+    if not dylibs_to_inject:
+      return
+
+    # Save entitlements, remove signature, inject, then re-sign (same as main binary)
+    ent_path = f"{appex_path}/cyan.entitlements"
+    has_entitlements = ext_bundle.executable.write_entitlements(ent_path)
+    ext_bundle.executable.remove_signature()
+
+    # Inject load commands
+    for dylib_name in dylibs_to_inject:
+      if inject_to_path:
+        # With -p: dylib is at app root (App.app/dylib.dylib)
+        # Extension is at App.app/PlugIns/X.appex/ or App.app/Extensions/X.appex/
+        # So we need to go up 2 levels: ../../dylib.dylib
+        ext_bundle.executable.inj_func(f"@executable_path/../../{dylib_name}")
+      else:
+        # Without -p: dylib is in Frameworks/, use @rpath
+        ext_bundle.executable.inj_func(f"@rpath/{dylib_name}")
+
+    if ext_bundle.executable.inj is not None:
+      ext_bundle.executable.inj.write(ext_bundle.executable.path)
+
+    if has_entitlements:
+      ext_bundle.executable.sign_with_entitlements(ent_path)
+
+    print(f"[*] injected into extension: {appex_name}")
+
+  def inject_all_extensions(
+    self,
+    tweaks: dict[str, str],
+    tmpdir: str,
+    inject_to_path: bool,
+    inject_all: bool
+  ) -> None:
+    # First inject into main binary (existing behavior)
+    self.executable.inject(tweaks, tmpdir, inject_to_path)
+
+    if not inject_all:
+      return
+
+    # Then inject into all extensions
+    appex_list = self.get_all_appex()
+    if not appex_list:
+      print("[?] no app extensions found for -a")
+      return
+
+    for appex_path in appex_list:
+      self._inject_into_extension(appex_path, tweaks, inject_to_path)
 
